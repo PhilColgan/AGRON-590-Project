@@ -1,0 +1,14 @@
+---
+title: "Project Proposal"
+author: "Phil Colgan"
+date: "October 28, 2016"
+output: html_document
+---
+
+The data we are working with is from the Comparison of Biofuel Systems (COBS) project consisting of biogeochemical data from soils taken from prairie and corn fields.  The purpose of the COBS project is to explore the impact of land use on soil biology, chemistry and physical properties. Understanding the impact we have on soil properties can provide insight into land management practices resulting in sustainable production with minimal nutrient inputs. 
+
+The COBS data set is currently fragmented and not tidy which is a problem considering the number of people collaborating on this project.  The goals of the project for this class include creating a data dictionary, reformatting the data set into a tidy format, performing a few statistical analyses on the data and laying the foundation for automation of soil-microbial data analysis.  
+
+We will achieve these goals by utilizing "tidy data" techniques and packages such as dplyr as well as by performing PCoA and NMDS statistics to investigate correlations that coincide with the objectives of the COBS project.  
+
+Data dictionary, Tidy formatting, Table Merging will be done by 11/10/16.  Stats will be done by 11/19/16.  Powerpoint will be done by 12/12/16.
