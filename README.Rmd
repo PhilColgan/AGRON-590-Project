@@ -1,7 +1,9 @@
 ---
 title: "COBS_CAZY"
-output: html_notebook
 root: ../../../
+output:
+  html_document: default
+  html_notebook: default
 ---
 ![](images/COBSPIC.png)
 ------

@@ -1,0 +1,78 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+BLAST pipeline
+
+Generate nucleotide sequences
+
+Two approaches
+
+  1. Nucleotide from NCBI directly
+  2. Convert ammino acid seq to nuc seq 
+  
+#Method 1
+
+Search NCBI for E.C. number of choice, here a text files containing multiple E.C. numbers was used. 
+
+```{python}
+import sys
+from Bio import Entrez, SeqIO
+
+Entrez.email = 'jflater@iastate.edu'
+
+# First, find entries that contain the E.C. number
+ec_num = sys.argv[1].strip()
+#print ec_num
+#print 'E.C. '+ ec_num
+esearch_handle = Entrez.esearch(db='nucleotide', term='EC '+ec_num)
+# When term='E.C. we get zero results, however, if term=EC it works
+entries = Entrez.read(esearch_handle)
+esearch_handle.close()
+
+# Second, fetch these entries
+efetch_handle = Entrez.efetch(db='nucleotide', id=entries['IdList'], rettype='gb', retmode='xml') 
+records = Entrez.parse(efetch_handle)
+
+# Now, we go through the records and look for a feature with name 'EC_number'
+for record in records:
+      for feature in record['GBSeq_feature-table']:
+          for subfeature in feature['GBFeature_quals']:
+              if (subfeature['GBQualifier_name'] == 'EC_number'   and
+                subfeature['GBQualifier_value'] == ec_num):
+
+                    # If we found it, we extract the seq's start and end
+                    accession = record['GBSeq_primary-accession']
+                    interval = feature['GBFeature_intervals'][0]
+                    interval_start = interval['GBInterval_from']
+                    interval_end = interval['GBInterval_to']
+                    location = feature['GBFeature_location']
+                    if location.startswith('complement'):
+                        strand = 2
+                    else:
+                        strand = 1
+
+                    # Now we fetch the nucleotide sequence
+                    handle = Entrez.efetch(db="nucleotide", id=accession,
+                                           rettype="fasta", strand=strand,
+                                           seq_start = interval_start,
+                                           seq_stop = interval_end)
+                    seq = SeqIO.read(handle, "fasta")
+
+                    print('>GenBank Accession:{}'.format(accession))
+                    print(seq.seq)
+efetch_handle.close()
+```
+
+#Method 2
+
+Method one was not working in the manner that we expected, so we devised a two step method instead.
+First NCBI must manually be searched for the E.C. number of interest, in the protein database. https://www.ncbi.nlm.nih.gov/protein.
+The search results can be downloaded in fasta format, the format that the seq need to be in for blasting. 
+
+A file yielded from the EC search of the NCBI databse looks like: 
+```{bash}
+head data/COBS_Protien_seqs_EC_3.2.1/EC_3.2.1.21.fasta.txt
+```
+We can use these amino acid sequences to fetch the nucleotid sequences from NCBI
+

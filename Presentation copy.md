@@ -30,11 +30,14 @@ Hello
   3. (CB) 1,4-beta-cellobiosidase [EC:3.2.1.91] is a Cellobiase
   
 ========================================================
+Data Generation:
+
+1. Retrieve metagenomes from MG-RAST
+2. Retrieve amino acid sequences for enzymes (EC#s) of interest
+3. BLAST amino acid sequences against nucleotide sequence database
+4. 3 nucleotide databases generated(one for each enzyme)
+5. Blast each nuclotide db against metagenomes from soil
+6. Generate count table for each enzyme (count of nuc sequences associated with our enzymes)
+========================================================
 
 
-
-
-
-```
-Error in eval(expr, envir, enclos) : could not find function "read_tsv"
-```
