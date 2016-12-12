@@ -1,0 +1,154 @@
+---
+title: "practice"
+author: "Phil Colgan"
+date: "12/5/2016"
+output: html_document
+---
+```{r}
+setwd("~/Desktop/590/")
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(reshape2)
+library(vegan)
+```
+
+#make the tidy metadata file
+```{r}
+cobs_data<- read.csv("~/Desktop/590/KBase_MGRast_Metadata_9May2013_EMB.csv", stringsAsFactors = FALSE)
+colnames(cobs_data)<-c("sample_Id" , "sample_month" , "sample_year" , "crop" , "sample_block" , "agg_frac" , "MGRAST_Id" , "agrochem_addition" , "crop_rot" , "land_use" , "veg_class" , "veg_class_meth" , "drain_class" , "extreme_event" , "FAO_class" , "fire_hist" , "soil_hor" , "soil_hor_meth" , "link_soil_method" , "soil_tax" , "soil_tax_meth" , "MGRAST_Id" , "micro_bm" , "micro_bm_meth" , "misc_param" , "pH" , "pH_meth" , "dna_mix" , "land_use_pre" , "land_use_pre_meth" , "sample_position" , "salinity_meth" , "sample_wt_dna" , "siev_size" , "slope_aspect" , "slope_grad" , "soil_type" , "soil_type_meth" , "store_cond" , "texture" , "texture_meth" , "till" , "total_N" , "total_N_meth" , "total_OC_meth" , "total_OC" , "soil_water" , "soil_water_meth" , "total_C" , "misc_param_1" , "MBN_dry" , "MBN_applied" , "Ext_C_dry" , "Ext_C_applied" , "Ext_C_N_dry" , "Ext_N_applied" , "Bulk_dense" , "Ext_P_dry" , "AMF_col" , "AP_act" , "BG_act" , "BX_act" , "CB_act" , "NAG_act" , "Sum_C_act" , "MBC_dry" , "MBC_applied" , "MBC_MBN_meth" , "Ext_C_Ext_N_meth" , "AMF_col_meth" , "root_bm" , "root_dep" , "AMF_col_bm" , "MBC:MBN" , "MWD" , "agg_frac_prop" , "N2O_2011" , "CH4_2011" , "N2O_2012" , "CO2_2011" , "CO2_2012")
+to_remove <- names(which(table(names(cobs_data)) > 1))
+cobs_updated <- cobs_data[-1, !(to_remove == names(cobs_data))]
+summary(cobs_updated)
+table(cobs_updated$total_OC_meth)
+empty <- numeric(0)
+for(i in 1:ncol(cobs_updated)){
+ if(sum(cobs_updated[, i] == "") == nrow(cobs_updated)) {
+   empty <- c(empty, i)
+ }
+}
+subset_cobs <- select(cobs_updated, -empty)
+library(tidyverse)
+parsed_cobs <- subset_cobs %>%
+ separate("texture", into = c("sand", "silt", "clay"), sep=",") %>%
+ separate(sample_Id, into = c("plot_treatment", "agg_fraction", "date"), sep="-") 
+parsed_cobs[2:3]<- list(NULL)
+library(stringi)
+parsed_cobs$plot <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatment, pattern = "[0-9]+"))
+parsed_cobs$treatment <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatment, pattern = "[A-Z]+"))
+tidy_cobs <- select(parsed_cobs, plot, treatment, sample_month:CO2_2012)
+write.csv(tidy_cobs, "Tidy_Cobs.csv", row.names=F)
+```
+
+#Previous analysis
+```{r}
+#Read in the abundance, meta and link tables
+BG_abun=read.table("~/Desktop/590/summary-count-21.tsv",header=T)
+BX_abun=read.table("~/Desktop/590/summary-count-37.tsv",header=T)
+CB_abun=read.table("~/Desktop/590/summary-count-91.tsv",header=T)
+meta=read.csv("~/Desktop/590/Tidy_Cobs.csv")
+smplnk=read.csv("~/Desktop/590/SampleLink4.csv")
+
+#Transpose each data frame and modify rownames so they all match
+BG.t=data.frame(t(BG_abun))
+BG.t$row=row.names(BG.t)
+BG.t$row=gsub("_R1", "", BG.t$row)
+BG.t$row=gsub("_R2", "", BG.t$row)
+BX.t=data.frame(t(BX_abun))
+BX.t$row=row.names(BX.t)
+BX.t$row=gsub("_R1", "", BX.t$row)
+BX.t$row=gsub("_R2", "", BX.t$row)
+CB.t=data.frame(t(CB_abun))
+CB.t$row=row.names(CB.t)
+CB.t$row=gsub("_R1", "", CB.t$row)
+CB.t$row=gsub("_R2", "", CB.t$row)
+meta$agg_frac<-gsub("micro", "Micro", meta$agg_frac)
+meta$group<-paste(meta$treatment, meta$plot, sep="")
+meta$myear<-paste(meta$sample_month, meta$sample_year, sep="")
+meta$SampleName<-paste(meta$group, meta$agg_frac, meta$myear, sep="-")
+
+#Merge transposed count tables with link tables
+smplnkBG=merge(BG.t,smplnk,by.x="row",by.y="rast_file")
+smplnkBX=merge(BX.t,smplnk,by.x="row",by.y="rast_file")
+smplnkCB=merge(CB.t,smplnk,by.x="row",by.y="rast_file")
+mergedataBG=merge(meta,smplnkBG, by.x = "SampleName", by.y = "SampleName")
+mergedataBX=merge(meta,smplnkBX, by.x = "SampleName", by.y = "SampleName")
+mergedataCB=merge(meta,smplnkCB, by.x = "SampleName", by.y = "SampleName")
+
+#Make counts numeric instead of integers
+cn<-c(names(mergedataBG[, 1:77]), "SoilFrac", "Crop")
+mergedataBG[, !names(mergedataBG) %in% cn] = lapply(mergedataBG[, !names(mergedataBG) %in% cn], as.numeric)
+mergedataBX[, !names(mergedataBX) %in% cn] = lapply(mergedataBX[, !names(mergedataBX) %in% cn], as.numeric)
+mergedataCB[, !names(mergedataCB) %in% cn] = lapply(mergedataCB[, !names(mergedataCB) %in% cn], as.numeric)
+
+#Sum gene counts for each metagenome
+countBG = rowSums(mergedataBG[,77:6291])
+countBX = rowSums(mergedataBX[,77:2532])
+countCB = rowSums(mergedataCB[,77:1439])
+mergedataBG$BG_counts<-countBG
+mergedataBX$BX_counts<-countBX
+mergedataCB$CB_counts<-countCB
+
+#Merge gene count columns into one table
+mergedata = mergedataBG
+mergedata$BX_counts<-paste(mergedataBX$BX_counts)
+mergedata$CB_counts<-paste(mergedataCB$CB_counts)
+mergedata[,6299:6301] = lapply(mergedata[,6299:6301],as.numeric)
+```
+
+```{r}
+#standardize mergedata using decostand in Vegan package
+mergedatastd <- decostand(mergedata[,c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts")], "range")
+
+#Figure 1
+myvars <- c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts")
+subset = mergedatastd[myvars]
+ggpairs(subset, title="Enzyme Abundance and Activity Correlations")
+
+#Export figure 1 as .jpg
+jpeg("images/correlation.jpg")
+ggpairs(subset, title="Enzyme Abundance and Activity Correlations")
+dev.off()
+
+#Figure 2a
+ggplot(mergedata, aes(x=BG_act, y = BG_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Beta-glucosidase Activity") + ylab("Beta-glucosidase Gene Abundances") +labs(title="Beta-glucosidase Activity vs. Abundances")
+
+#Figure 2b
+ggplot(mergedata, aes(x=BX_act, y = BX_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Beta-D-xylosidase Activity") + ylab("Gene Abundances") +labs(title="Beta-D-xylosidase Activity vs. Abundances")
+
+#Figure 2c
+ggplot(mergedata, aes(x=CB_act, y = CB_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("1,4-beta-cellobiosidase Activity") + ylab("1,4-beta-cellobiosidase Gene Abundances")  +labs(title="1,4-beta-cellobiosidase Activity vs. Abundances")
+
+#Export Figure 2a-c as jpegs
+jpeg("images/Fig2BG.jpg")
+ggplot(mergedata, aes(x=BG_act, y = BG_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Beta-glucosidase Activity") + ylab("Beta-glucosidase Gene Abundances") +labs(title="Beta-glucosidase Activity vs. Abundances")
+dev.off()
+
+jpeg("images/Fig2BX.jpg")
+ggplot(mergedata, aes(x=BX_act, y = BX_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Beta-D-xylosidase Activity") + ylab("Gene Abundances") +labs(title="Beta-D-xylosidase Activity vs. Abundances")
+dev.off()
+
+jpeg("images/Fig2CB.jpg")
+ggplot(mergedata, aes(x=CB_act, y = CB_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("1,4-beta-cellobiosidase Activity") + ylab("1,4-beta-cellobiosidase Gene Abundances")  +labs(title="1,4-beta-cellobiosidase Activity vs. Abundances")
+dev.off()
+
+#Figure 3a-c
+ggplot(mergedata, aes(x=total_C, y = BG_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("Beta-glucosidase Gene Abundances") + labs(title="Total Carbon vs. Beta-glucosidase Activity")
+
+ggplot(mergedata, aes(x=total_C, y = CB_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("1,4-beta-cellobiosidase Gene Abundances") + labs(title="Total Carbon vs, 1,4-beta-cellobiosidase Activity")
+
+ggplot(mergedata, aes(x=total_C, y = BX_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("Gene Abundances") + labs(title="Total Carbon vs. Beta-D-xylosidase Activity")
+
+#Export figures 3a-c as jpegs
+jpeg("images/Fig3BG.jpg")
+ggplot(mergedata, aes(x=total_C, y = BG_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("Beta-glucosidase Gene Abundances") + labs(title="Total Carbon vs. Beta-glucosidase Activity")
+dev.off()
+
+jpeg("images/Fig3BX.jpg")
+ggplot(mergedata, aes(x=total_C, y = BX_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("Gene Abundances") + labs(title="Total Carbon vs. Beta-D-xylosidase Activity")
+dev.off()
+
+jpeg("images/Fig3CB.jpg")
+ggplot(mergedata, aes(x=total_C, y = CB_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("1,4-beta-cellobiosidase Gene Abundances") + labs(title="Total Carbon vs, 1,4-beta-cellobiosidase Activity")
+dev.off()
+```
