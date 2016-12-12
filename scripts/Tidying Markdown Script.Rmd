@@ -1,21 +1,21 @@
 ---
 title: "Cobs Tidy Script"
+root: ../../../
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+## Loading data and setting working directory
+```{r, eval=TRUE, cache=TRUE}
+cobs_data<- read.csv("../data/KBase_MGRast_Metadata_9May2013_EMB.csv", stringsAsFactors = FALSE)
 ```
 
-## Loading data and setting working directory
-```{r}
-install.packages(c("dplyr" , "ggplot2"))
-getwd()
-cobs_data<- read.csv("data/KBase_MGRast_Metadata_9May2013_EMB.csv", stringsAsFactors = FALSE)
+```{r, eval=TRUE, cache=TRUE}
+head(cobs_data)
 ```
+
 
 ## loading necessary libraries
-```{r}
+```{r, eval=TRUE}
 library(tidyverse)
 library(stringi)
 ```
