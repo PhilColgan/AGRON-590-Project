@@ -1,0 +1,438 @@
+---
+title: "Cobs Paper"
+root: ../../../
+output: html_document
+---
+![](images/COBSPIC.png)
+
+#COBS: A Background
+
+The Comparison of Biofuels Systems (COBS) is a field trial and collaboration between Iowa State University and the University of Illinois. The COBS experiment seeks to compare the impacts of different biofuel production systems. Of particular interest is the impact of the production system on carbon cycling and soil health. In order to investigate this impact, a unique soil sampling was performed in 2012, so that metagenomes could be assembled and used to explore the distribution of carbon cycling genes. 
+
+What made this soil sampling unique was the separation of the soil into aggregate fractions, in a non-destructive manner. In short, the soil was sieved at 4 degrees c. using sieves that corresponding to the aggregate fraction of interest. 
+
+Previous investigations into this data set have shown that there is a distribution/differences in bacterial communities across aggregate fractions and cropping systems. 
+
+![](images/COBScomposition.png)
+The above image is a figure taken from the previous work done on our data set. What it is showing is how closely related the bacterial communities of the aggregate fractions and the cropping systems are. The further apart on this graph, the more dissimilar the objects are. 
+
+![](images/AGGdist.png)
+
+##What is an aggregate?
+  
+Soil aggregates are groups of soil particles that bind to each other more strongly than to adjacent particles. The space between the aggregates   provide pore space for retention and exchange of air and water.
+
+##What is a metagenome? 
+A library constructed from the DNA extracted from all organisms in the soil. 
+  
+##Now What?
+So we have a unique data set that consists of all the DNA from soil aggregate fractions from the COBS experiment. In addition to the genomic data, we started with metadata that was not tidy.
+
+Our challenge was to use the metagenome libraries to construct abundance tables that quantify the abundance of bacterial species capable of performing a step in the decomposition of cellulose. In order to facilitate our analysis of these data in R, we had to tidy up the COBS metadata. The metadata consists of many chemical and physical characteristics of the soil samples from the cobs aggregate fractions. 
+
+For investigating the presence of cellulolytic bacteria, we needed to generate a list of bacterial sequences associated with cellulose degradation. We did this by searching the NCBI database for amino acid sequences associated with 1 of 3 enzymes. The enzymes we are interested are all involved in the break down of cellulose in the soil. Once we have this list, we can compare the aggregate fractions for the abundance of cellulolytic bacteria. 
+
+We can do this by quantifying the amount of bacteria that have genes associated with carbon degrading enzymes of interest. These enzymes are: 
+
+  1. (BG) beta-glucosidase [EC:3.2.1.21] is an Endocellulase
+  2. (BX) beta-D-xylosidase 4 [EC:3.2.1.37] is an Exocellulase
+  3. (CB) 1,4-beta-cellobiosidase [EC:3.2.1.91] is a Cellobiase
+  
+Together these three enzymes can convert a cellulose crystal to glucose molecules, that are an important energy source for the microbial community in the soil.   
+
+![](images/Types_of_Cellulase2.png)
+
+In order to generate gene counts for each enzyme in each soil sample, I first had to generate files that contain protein sequences associated with the enzymes previously mentioned. We tried two different approaches for generating this data, one attempted to automate the process by searching the NCBI database directly for nucleotide sequences associated with our enzymes. However, the script did not perform as accurately as manually searching NCBI and downloading the protein sequences. The failed script for searching NCBI is shown below. We plan to troubleshoot this script further in hopes of bringing it's performance up. The problem is it does not generate as many sequences that we can use to query the databases as a manual search did. 
+
+```{python, eval=FALSE}
+import sys
+from Bio import Entrez, SeqIO
+
+Entrez.email = 'jflater@iastate.edu'
+
+# First, find entries that contain the E.C. number
+ec_num = sys.argv[1].strip()
+# Editing to only search for #, exclude "EC and E.C."
+esearch_handle = Entrez.esearch(db='nucleotide', term=ec_num)
+entries = Entrez.read(esearch_handle)
+esearch_handle.close()
+
+# Second, fetch these entries
+efetch_handle = Entrez.efetch(db='nucleotide', id=entries['IdList'], rettype='gb', retmode='xml') 
+records = Entrez.parse(efetch_handle)
+
+# Now, we go through the records and look for a feature with name 'EC_number'
+for record in records:
+      for feature in record['GBSeq_feature-table']:
+          for subfeature in feature['GBFeature_quals']:
+              if (subfeature['GBQualifier_name'] == 'EC_number'   and
+                subfeature['GBQualifier_value'] == ec_num):
+
+                    # If we found it, we extract the seq's start and end
+                    accession = record['GBSeq_primary-accession']
+                    interval = feature['GBFeature_intervals'][0]
+                    interval_start = interval['GBInterval_from']
+                    interval_end = interval['GBInterval_to']
+                    location = feature['GBFeature_location']
+                    if location.startswith('complement'):
+                        strand = 2
+                    else:
+                        strand = 1
+
+                    # Now we fetch the nucleotide sequence
+                    handle = Entrez.efetch(db="nucleotide", id=accession,
+                                           rettype="fasta", strand=strand,
+                                           seq_start = interval_start,
+                                           seq_stop = interval_end)
+                    seq = SeqIO.read(handle, "fasta")
+
+  b                  print('>GenBank Accession:{}'.format(accession))
+                    print(seq.seq)
+efetch_handle.close()
+```
+We run that script on this file:
+```{r}
+ec_numbers<- read.table("data/ec_numbers.txt")
+head(ec_numbers)
+```
+By using a while loop:
+```{bash, eval=FALSE}
+while read line;     
+  do python scripts/nucl_from_ec.py $line > "$line".txt;    
+  done < ec_numbers.txt
+```
+It's important to remember that this script did not work, we only include it to show our attempt at partial automation and to incentive ourselves to debug the code more in order to improve it's performance. 
+
+##See BLAST.Rmd for how to generate count table when starting from EC numbers. 
+
+We didn't use this method because the manual search method returned more protein sequences than the script, we believe it is an issue with the package needed to download from NCBI. Fewer protein sequences would mean that we would potentially find few similarities in the RefSeq database, which we use to find all seq similar to a protein sequence. Therefore, the manual method was used and is listed in the BLAST.Rmd along with all scripts associated with generating the gene count tables for each enzyme. 
+
+The summary counts for each enzyme that the BLAST.Rmd pipeline generate look like:
+```{r}
+summary_count_21<- read.table("data/summary_counts/summary-count-21.tsv")
+head(summary_count_21)
+```
+```{r}
+ncol(summary_count_21)
+nrow(summary_count_21)
+```
+As you can see, the summary_count table for this enzyme consists of columns representing each sample in our original dataset(different name and there were two rounds for each, but we will tackle that in the final analysis). 6,215 rows! Each row is the count of sequences associated with the nucleotide(gene) of interest (i.e. IF31_RS0116175) that were found in each metagenome. 
+
+These rows were then summed and the final metadata had counts for each gene, so that we ended up adding 3 columns to our meta data. 
+
+## Data Analysis
+
+We are starting with these files:
+
+1. The meta data: "../data/KBase_MGRast_Metadata_9May2013_EMB.csv"
+2. The three count tables for the three enzymes: "../data/summary_counts/summary-count-**.tsv"(there are three files in the summary_counts folder)
+3. The sample link file that connects our metagenome names to the sample names: "../data/SampleLink4.csv"
+
+## Loading data and setting working directory
+```{r, eval=TRUE}
+cobs_data<- read.csv("data/KBase_MGRast_Metadata_9May2013_EMB.csv", stringsAsFactors = FALSE)
+```
+
+```{r, eval=TRUE}
+head(cobs_data)
+```
+
+## loading necessary libraries
+```{r, eval=TRUE}
+library(tidyverse)
+library(stringi)
+```
+
+## changing heading names 
+```{r, cache=TRUE}
+colnames(cobs_data)<-c("sample_Id" , "sample_month" , "sample_year" , "crop" , "sample_block" , "agg_frac" , "MGRAST_Id" , "agrochem_addition" , "crop_rot" , "land_use" , "veg_class" , "veg_class_meth" , "drain_class" , "extreme_event" , "FAO_class" , "fire_hist" , "soil_hor" , "soil_hor_meth" , "link_soil_method" , "soil_tax" , "soil_tax_meth" , "MGRAST_Id" , "micro_bm" , "micro_bm_meth" , "misc_param" , "pH" , "pH_meth" , "dna_mix" , "land_use_pre" , "land_use_pre_meth" , "sample_position" , "salinity_meth" , "sample_wt_dna" , "siev_size" , "slope_aspect" , "slope_grad" , "soil_type" , "soil_type_meth" , "store_cond" , "texture" , "texture_meth" , "till" , "total_N" , "total_N_meth" , "total_OC_meth" , "total_OC" , "soil_water" , "soil_water_meth" , "total_C" , "misc_param_1" , "MBN_dry" , "MBN_applied" , "Ext_C_dry" , "Ext_C_applied" , "Ext_C_N_dry" , "Ext_N_applied" , "Bulk_dense" , "Ext_P_dry" , "AMF_col" , "AP_act" , "BG_act" , "BX_act" , "CB_act" , "NAG_act" , "Sum_C_act" , "MBC_dry" , "MBC_applied" , "MBC_MBN_meth" , "Ext_C_Ext_N_meth" , "AMF_col_meth" , "root_bm" , "root_dep" , "AMF_col_bm" , "MBC:MBN" , "MWD" , "agg_frac_prop" , "N2O_2011" , "CH4_2011" , "N2O_2012" , "CO2_2011" , "CO2_2012")
+
+```
+In order to make the data more human-friendly, I changed the heading names.  They are all now in a similar form and are more intuitive.  These are the heading names which will be used within the data dictionary.
+
+## removing duplicate column & first row
+```{r}
+to_remove <- names(which(table(names(cobs_data)) > 1))
+cobs_updated <- cobs_data[-1, !(to_remove == names(cobs_data))]
+```
+After preparing the data with better-suited header names, the next step was to delete any columns which were repeated.  Tidy data does not include duplicate columns.  There were two columns which had the exact same data repeated, and those were eliminated.  Secondly, the first row was deleted, as it did not contain any data, just a description of the header.  This was addressed in the separate data dictionary document, and so was unnecessary within the data set.
+
+## summary to find blank/null columns
+```{r}
+summary(cobs_updated)
+table(cobs_updated$total_OC_meth)
+
+empty <- numeric(0)
+for(i in 1:ncol(cobs_updated)){
+  if(sum(cobs_updated[, i] == "") == nrow(cobs_updated)) {
+   empty <- c(empty, i)
+  }
+}
+subset_cobs <- select(cobs_updated, -empty)
+```
+By looking at the raw data, I could tell there were a few columns which did not contain any data.  In order to tidy the data set,  I wanted to delete these.  By using the summarize function, and also creating a subset "empty" to house all columns which fit my description (no data values), I was able to subset the data by selecting only the columns which were not included in "empty", leaving only columns with values.
+
+## parsing columns
+```{r}
+parsed_cobs <- subset_cobs %>%
+  separate("texture", into = c("sand", "silt", "clay"), sep=",") %>%
+  separate(sample_Id, into = c("plot_treatment", "agg_fraction", "date"), sep="-") 
+```
+There were two columns within the data set which held multiple pieces of information, able to be split into individual columns.  Soil "texture" held percentages for sand, silt, and clay, so I placed each value in its own column.  Secondly, the column "sample Id" contained three different categories of information.  This was divided into plot treatment, aggregate fraction, and date for easier use in analysis.
+
+## Deleting after parsing
+```{r}
+parsed_cobs[2:3]<- list(NULL)
+```
+After splitting the columns into individual pieces, it was necessary to delete those which now repeated information.  The plot treatment and date became columns with repeated data, so they were deleted.
+
+## splitting column with regex
+```{r}
+library(stringi)
+
+parsed_cobs$plot <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatment, pattern = "[0-9]+"))
+parsed_cobs$treatment <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatment, pattern = "[A-Z]+"))
+```
+The column "plot treatment" actually contained two pieces of information.  The plot was in numeric form (12,21,35,43,13,24,31,46,15,23,32) and the treatment was in the form of 1-2 letters representing continuous corn (CC), prairie (P), and fertilized prairie (PF).  Because of these forms, it was more challenging to parse, especially because there was no dividing agent within the cell.  So, I used a function regex, to extract certain components. First, extracting only numeric values, and placing them into their own column "plot". Second, I repeated the function, but selected the opposite (character) and placed this piece in its own column, "treatment".
+
+## finalizing and selecting to form tidy subset
+```{r}
+tidy_cobs <- select(parsed_cobs, plot, treatment, sample_month:CO2_2012)
+```
+The final component of tidying this data included selecting all of the columns I wanted to be present within the subset. 
+
+```{r}
+## Loading data and setting working directory
+library(dplyr)
+library(ggplot2)
+cobs_data<- read.csv("data/KBase_MGRast_Metadata_9May2013_EMB.csv", stringsAsFactors = FALSE)
+
+## changing heading names
+
+colnames(cobs_data)<-c("sample_Id" , "sample_month" , "sample_year" , "crop" , "sample_block" , "agg_frac" , "MGRAST_Id" , "agrochem_addition" , "crop_rot" , "land_use" , "veg_class" , "veg_class_meth" , "drain_class" , "extreme_event" , "FAO_class" , "fire_hist" , "soil_hor" , "soil_hor_meth" , "link_soil_method" , "soil_tax" , "soil_tax_meth" , "MGRAST_Id" , "micro_bm" , "micro_bm_meth" , "misc_param" , "pH" , "pH_meth" , "dna_mix" , "land_use_pre" , "land_use_pre_meth" , "sample_position" , "salinity_meth" , "sample_wt_dna" , "siev_size" , "slope_aspect" , "slope_grad" , "soil_type" , "soil_type_meth" , "store_cond" , "texture" , "texture_meth" , "till" , "total_N" , "total_N_meth" , "total_OC_meth" , "total_OC" , "soil_water" , "soil_water_meth" , "total_C" , "misc_param_1" , "MBN_dry" , "MBN_applied" , "Ext_C_dry" , "Ext_C_applied" , "Ext_C_N_dry" , "Ext_N_applied" , "Bulk_dense" , "Ext_P_dry" , "AMF_col" , "AP_act" , "BG_act" , "BX_act" , "CB_act" , "NAG_act" , "Sum_C_act" , "MBC_dry" , "MBC_applied" , "MBC_MBN_meth" , "Ext_C_Ext_N_meth" , "AMF_col_meth" , "root_bm" , "root_dep" , "AMF_col_bm" , "MBC:MBN" , "MWD" , "agg_frac_prop" , "N2O_2011" , "CH4_2011" , "N2O_2012" , "CO2_2011" , "CO2_2012")
+
+## name to remove (duplicate column & first row)
+
+to_remove <- names(which(table(names(cobs_data)) > 1))
+cobs_updated <- cobs_data[-1, !(to_remove == names(cobs_data))]
+
+## summary to find if blanks are blanks/nulls/etc.
+
+summary(cobs_updated)
+table(cobs_updated$total_OC_meth)
+
+empty <- numeric(0)
+for(i in 1:ncol(cobs_updated)){
+  if(sum(cobs_updated[, i] == "") == nrow(cobs_updated)) {
+    empty <- c(empty, i)
+  }
+}
+subset_cobs <- select(cobs_updated, -empty)
+
+
+## parsing columns
+library(tidyverse)
+parsed_cobs <- subset_cobs %>%
+  separate("texture", into = c("sand", "silt", "clay"), sep=",") %>%
+  separate(sample_Id, into = c("plot_treatment", "agg_fraction", "date"), sep="-") 
+  
+  ## deleting unnecessary columns after parsing    
+  parsed_cobs[2:3]<- list(NULL)
+
+
+
+## splitting column "plot_treatment" using regex
+library(stringi)
+parsed_cobs$plot <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatment, pattern = "[0-9]+"))
+parsed_cobs$treatment <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatment, pattern = "[A-Z]+"))
+
+tidy_cobs <- select(parsed_cobs, plot, treatment, sample_month:CO2_2012)
+
+```
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+#creating data dictionary 
+data_dictionary <- data.frame(
+  name = c("plot", "treatment", "sample_month", "sample_year", "crop" , "sample_block" , "agg_frac", "agrochem_addition", "crop_rot" , "land_use" , "veg_class" , "veg_class_meth" , "drain_class" , "extreme_event" , "FAO_class" , "fire_hist" , "soil_hor" , "soil_hor_meth" , "link_soil_method" , "soil_tax" , "soil_tax_meth", "pH" , "pH_meth" , "dna_mix" , "land_use_pre", "siev_size", "slope_grad" , "soil_type" , "soil_type_meth" , "store_cond" , "sand", "silt", "clay", "texture_meth" , "till" , "total_N" , "total_N_meth", "soil_water" , "soil_water_meth" , "total_C" , "misc_param_1" , "MBN_dry" , "MBN_applied" , "Ext_C_dry" , "Ext_C_applied" , "Ext_C_N_dry" , "Ext_N_applied" , "Bulk_dense" , "Ext_P_dry" , "AMF_col" , "AP_act" , "BG_act" , "BX_act" , "CB_act" , "NAG_act" , "Sum_C_act" , "MBC_dry" , "MBC_applied" , "MBC_MBN_meth" , "Ext_C_Ext_N_meth" , "AMF_col_meth" , "root_bm" , "root_dep" , "AMF_col_bm" , "MBC:MBN" , "MWD" , "agg_frac_prop" , "N2O_2011" , "CH4_2011" , "N2O_2012" , "CO2_2011" , "CO2_2012"),
+  column = c("Plot", "Treatment", "Sample Month", "Sample Year", "Crop", "Sample Block", "Aggregate Fraction", "Agrochemical Addition", "Crop Rotation", "Current Land Use", "Vegetation Class", "Vegetation Class Method", "Drainage Class", "Extreme Events", "FAO Soil Class", "Fire History", "Soil Horizon", "Soil Horizon Method", "Link to Soil Horizon Method", "Soil Taxonomy", "Soil Taxonomy Method", "pH", "pH Method", "Presence and Number of Mixed DNA Extractions", "Previous Land Use", "Size of Sieve", "Slope Gradient", "Soil Type", "Soil Type Method", "Condition of Stored Soil Sample", "Sand", "Silt", "Clay", "Soil Texture Method", "Tillage Type", "Total Nitrogen", "Total Nitrogen Method", "Soil Water Content", "Soil Water Content Method", "Total Carbon", "Miscellaneous Parameter 1", "Microbial Biomass Nitrogen Dry", "Microbial Biomass Nitrogen Applied", "Extractable Carbon Dry", "Extractable Carbon Applied", "Extractable Carbon and Nitrogen Dry", "Extractable Nitrogen Applied", "Bulk Density", "Extractable Phosphorous Dry", "AMF Colony", "Acid Phosphatase Activity", "$\\beta$-Glucosidase Activity", "$\\beta$-Xylosidase Activity", "Cellobiohyrolase Activity", "$\\beta$-N-acetylglucosaminidase Activity", "Sum Carbon Activity", "Microbial Biomass Carbon Dry", "Microbial Biomass Carbon Applied", "Microbial Carbon and Nitrogen Method", "Extractable Carbon and Nitrogen Analysis Method", "AMF Colony Method", "Root Biomass", "Root Depth", "AMF Colony Biomass", "Microbial Carbon:Microbial Nitrogen Ratio",	"Mean Weight Diameter", "Aggregate Fraction", "Nitrous Oxide Measurements 2011", "Methane Measurements 2011", "Nitrous Oxide Measurements 2012", "Carbon Dioxide Measurements 2011", "Carbon Dioxide Measurements 2012"),
+  description = c("Plot sample was taken from", "Treatment number plot received", "Month the sample was taken", "Year the sample was taken", "Cropping system", "Experimental block", "Fraction of aggregate", "Addition of fertilizers, pesticides, amount and time of applications", "Whether or not crop is rotated, and if yes, rotation schedule", "Current land use of sample site", "Vegetation classification", "Method of vegetation classification", "Drainage classification", "Unusual physical events that may have affected microbial populations", "Soil classification from the FAO World Reference Database for Soil Resources", "Historical and/or physical evidence of fire", "Layer of soil which exhibits physical characteristics that vary compared to the layers above and beneath", "Method used in determining the horizon", "Web link to digitized soil maps or other soil classification information", "Soil classification based on local soil classification system", "Method used in determining the local soil classification", "pH measurement", "Method for determining pH", "Number of mixed DNA extractions (string(???)) Only one DNA extraction used (no)", "Previous land use and dates of recorded history", "Size of sieve in millimeters", "The angle between ground surface and a horizontal line in percent", "Soil series name or other lower-level classification", "Method used in determining soil series name or other lower-level classification", "How and for how long the soil sample was stored before DNA extraction", "Relative proportion of percent sand (50 um to 2 mm)", "Relative proportion of silt (2 um to 50 um)", "Relative proportion of clay (<2 um)", "Method used in determining soil texture", "Method used for tilling", "Total nitrogen content of the soil in grams of Nitrogen per kilogram of soil", "Method used in determining the total Nitrogen", "Water content (g/g or cm3/cm3) in soil", "Method used in determining the water content of soil", "Total Carbon in mg/g", "Any other measurement performed or parameter collected that is not listed here", "Amount of Nitrogen in the microbial biomass in micrograms of Nitrogen per 1 gram of dry soil", "CFE	MBN gN m-2", "Extractable Carbon in micrograms of Carbon per gram of dry soil", "Extractable Carbon in grams of Carbon per square meter","Extractable Carbon in micrograms of Nitrogen per gram of dry soil", "Extractable Nitrogen in grams of Carbon per square meter", "Bulk density in grams per cubed centimeter", "Extractable Phosphorous using Bray's extraction method in milligras per kilogram of dry soil", "Percentage of Community of arbuscular mycorrhizal fungi", "Acid Phosphatase (AP) Activity in nanomoles of hydrogen per gram of dry aggregate", "$\\beta$-Glucosidase (BG) Activity in nanomoles of hydrogen per gram of dry aggregate", "$\\beta$-Xylosidase (BX) Activity in nanomoles of hydrogen per gram of dry aggregate", "Cellobiohyrolase (CB) Activity in nanomoles of hydrogen per gram of dry aggregate", "$\\beta$-N-acetylglucosaminidase (NAG) Activity in nanomoles of hydrogen per gram of dry aggregate", "Sum of Carbon activity in nanomoles of hydrogen per gram of dry aggregate", "BG + BX + CB	MBC ugC g-1 dry soil CFE", "MBC gC m-2 CFE", "Method for Carbon and Nitrogen analysis in microbial", "Method for extractable Carbon and Nitrogen analysis", "Method for Community of arbuscular mycorrhizal fungi", "Amount of root biomass in megagrams per hectare", "Depth of roots in centimeters", "Biomass of Community of arbuscular mycorrhizal fungi", "Ratio of microbial biomass carbon to nitrogen",	"Mean Weight Diameter in micromoles", "Proportion of aggregate fraction", "Nitrous Oxide Measurements 2011 in micromoles per square meter", "Methane Measurements 2011 in micromoles per square meter", "Nitrous Oxide Measurements 2012 in micromoles per square meter", "Carbon Dioxide Measurements 2011 in micromoles per square meter", "Carbon Dioxide Measurements 2012 in micromoles per square meter"))
+knitr::kable(data_dictionary)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(reshape2)
+library(vegan)
+```
+
+#make the tidy metadata file
+```{r}
+colnames(cobs_data)<-c("sample_Id" , "sample_month" , "sample_year" , "crop" , "sample_block" , "agg_frac" , "MGRAST_Id" , "agrochem_addition" , "crop_rot" , "land_use" , "veg_class" , "veg_class_meth" , "drain_class" , "extreme_event" , "FAO_class" , "fire_hist" , "soil_hor" , "soil_hor_meth" , "link_soil_method" , "soil_tax" , "soil_tax_meth" , "MGRAST_Id" , "micro_bm" , "micro_bm_meth" , "misc_param" , "pH" , "pH_meth" , "dna_mix" , "land_use_pre" , "land_use_pre_meth" , "sample_position" , "salinity_meth" , "sample_wt_dna" , "siev_size" , "slope_aspect" , "slope_grad" , "soil_type" , "soil_type_meth" , "store_cond" , "texture" , "texture_meth" , "till" , "total_N" , "total_N_meth" , "total_OC_meth" , "total_OC" , "soil_water" , "soil_water_meth" , "total_C" , "misc_param_1" , "MBN_dry" , "MBN_applied" , "Ext_C_dry" , "Ext_C_applied" , "Ext_C_N_dry" , "Ext_N_applied" , "Bulk_dense" , "Ext_P_dry" , "AMF_col" , "AP_act" , "BG_act" , "BX_act" , "CB_act" , "NAG_act" , "Sum_C_act" , "MBC_dry" , "MBC_applied" , "MBC_MBN_meth" , "Ext_C_Ext_N_meth" , "AMF_col_meth" , "root_bm" , "root_dep" , "AMF_col_bm" , "MBC:MBN" , "MWD" , "agg_frac_prop" , "N2O_2011" , "CH4_2011" , "N2O_2012" , "CO2_2011" , "CO2_2012")
+to_remove <- names(which(table(names(cobs_data)) > 1))
+cobs_updated <- cobs_data[-1, !(to_remove == names(cobs_data))]
+summary(cobs_updated)
+table(cobs_updated$total_OC_meth)
+empty <- numeric(0)
+for(i in 1:ncol(cobs_updated)){
+ if(sum(cobs_updated[, i] == "") == nrow(cobs_updated)) {
+   empty <- c(empty, i)
+ }
+}
+subset_cobs <- select(cobs_updated, -empty)
+library(tidyverse)
+parsed_cobs <- subset_cobs %>%
+ separate("texture", into = c("sand", "silt", "clay"), sep=",") %>%
+ separate(sample_Id, into = c("plot_treatment", "agg_fraction", "date"), sep="-") 
+parsed_cobs[2:3]<- list(NULL)
+library(stringi)
+parsed_cobs$plot <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatment, pattern = "[0-9]+"))
+parsed_cobs$treatment <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatment, pattern = "[A-Z]+"))
+tidy_cobs <- select(parsed_cobs, plot, treatment, sample_month:CO2_2012)
+write.csv(tidy_cobs, "Tidy_Cobs.csv", row.names=F)
+```
+
+#Previous analysis
+```{r}
+#Read in the abundance, meta and link tables
+BG_abun=read.table("data/summary_counts/summary-count-21.tsv",header=T)
+BX_abun=read.table("data/summary_counts/summary-count-37.tsv",header=T)
+CB_abun=read.table("data/summary_counts/summary-count-91.tsv",header=T)
+meta=read.csv("Tidy_Cobs.csv")
+smplnk=read.csv("data/SampleLink4.csv")
+
+#Transpose each data frame and modify rownames so they all match
+BG.t=data.frame(t(BG_abun))
+BG.t$row=row.names(BG.t)
+BG.t$row=gsub("_R1", "", BG.t$row)
+BG.t$row=gsub("_R2", "", BG.t$row)
+BX.t=data.frame(t(BX_abun))
+BX.t$row=row.names(BX.t)
+BX.t$row=gsub("_R1", "", BX.t$row)
+BX.t$row=gsub("_R2", "", BX.t$row)
+CB.t=data.frame(t(CB_abun))
+CB.t$row=row.names(CB.t)
+CB.t$row=gsub("_R1", "", CB.t$row)
+CB.t$row=gsub("_R2", "", CB.t$row)
+meta$agg_frac<-gsub("micro", "Micro", meta$agg_frac)
+meta$group<-paste(meta$treatment, meta$plot, sep="")
+meta$myear<-paste(meta$sample_month, meta$sample_year, sep="")
+meta$SampleName<-paste(meta$group, meta$agg_frac, meta$myear, sep="-")
+
+#Merge transposed count tables with link tables
+smplnkBG=merge(BG.t,smplnk,by.x="row",by.y="rast_file")
+smplnkBX=merge(BX.t,smplnk,by.x="row",by.y="rast_file")
+smplnkCB=merge(CB.t,smplnk,by.x="row",by.y="rast_file")
+mergedataBG=merge(meta,smplnkBG, by.x = "SampleName", by.y = "SampleName")
+mergedataBX=merge(meta,smplnkBX, by.x = "SampleName", by.y = "SampleName")
+mergedataCB=merge(meta,smplnkCB, by.x = "SampleName", by.y = "SampleName")
+
+#Make counts numeric instead of integers
+cn<-c(names(mergedataBG[, 1:77]), "SoilFrac", "Crop")
+mergedataBG[, !names(mergedataBG) %in% cn] = lapply(mergedataBG[, !names(mergedataBG) %in% cn], as.numeric)
+mergedataBX[, !names(mergedataBX) %in% cn] = lapply(mergedataBX[, !names(mergedataBX) %in% cn], as.numeric)
+mergedataCB[, !names(mergedataCB) %in% cn] = lapply(mergedataCB[, !names(mergedataCB) %in% cn], as.numeric)
+
+#Sum gene counts for each metagenome
+countBG = rowSums(mergedataBG[,77:6291])
+countBX = rowSums(mergedataBX[,77:2532])
+countCB = rowSums(mergedataCB[,77:1439])
+mergedataBG$BG_counts<-countBG
+mergedataBX$BX_counts<-countBX
+mergedataCB$CB_counts<-countCB
+
+#Merge gene count columns into one table
+mergedata = mergedataBG
+mergedata$BX_counts<-paste(mergedataBX$BX_counts)
+mergedata$CB_counts<-paste(mergedataCB$CB_counts)
+mergedata[,6299:6301] = lapply(mergedata[,6299:6301],as.numeric)
+```
+
+```{r, cache=TRUE, warning=FALSE}
+#standardize mergedata using decostand in Vegan package
+mergedatastd <- decostand(mergedata[,c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts")], "range")
+
+#Figure 1
+myvars <- c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts")
+subset = mergedatastd[myvars]
+ggpairs(subset, title="Enzyme Abundance and Activity Correlations")
+```
+
+```{r, eval=FALSE}
+#Export figure 1 as .pdf
+
+a1=ggpairs(subset, title="Enzyme Abundance and Activity Correlations")
+pdf("images/correlation.pdf")
+print(a1)
+dev.off()
+```
+
+```{r, warning=FALSE}
+#Figure 2a
+ggplot(mergedata, aes(x=BG_act, y = BG_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Beta-glucosidase Activity") + ylab("Beta-glucosidase Gene Abundances") + labs(title="Beta-glucosidase Activity vs. Abundances")
+
+#Figure 2b
+ggplot(mergedata, aes(x=BX_act, y = BX_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Beta-D-xylosidase Activity") + ylab("Beta-D-xylosidase Gene Abundances") +labs(title="Beta-D-xylosidase Activity vs. Abundances")
+
+#Figure 2c
+ggplot(mergedata, aes(x=CB_act, y = CB_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("1,4-beta-cellobiosidase Activity") + ylab("1,4-beta-cellobiosidase Gene Abundances") + labs(title="1,4-beta-cellobiosidase Activity vs. Abundances")
+```
+
+```{r, eval=FALSE}
+#Export Figure 2a-c as .pdf
+
+a2=ggplot(mergedata, aes(x=BG_act, y = BG_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Beta-glucosidase Activity") + ylab("Beta-glucosidase Gene Abundances") + labs(title="Beta-glucosidase Activity vs. Abundances")
+pdf("../images/Fig2BG.pdf", width = 640, height = 640)
+print(a2)
+dev.off()
+
+b2=ggplot(mergedata, aes(x=BX_act, y = BX_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Beta-D-xylosidase Activity") + ylab("Beta-D-xylosidase Gene Abundances") +labs(title="Beta-D-xylosidase Activity vs. Abundances")
+pdf("../images/Fig2BX.png", width = 640, height = 640)
+print(b2)
+dev.off()
+
+c2=ggplot(mergedata, aes(x=CB_act, y = CB_counts)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("1,4-beta-cellobiosidase Activity") + ylab("1,4-beta-cellobiosidase Gene Abundances") + labs(title="1,4-beta-cellobiosidase Activity vs. Abundances")
+pdf("../images/Fig2CB.pdf", width = 640, height = 640)
+print(c2)
+dev.off()
+```
+
+```{r, warning=FALSE}
+#Figure 3a-c
+ggplot(mergedata, aes(x=total_C, y = BG_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("Beta-glucosidase Gene Abundances") + labs(title="Total Carbon vs. Beta-glucosidase Activity")
+
+ggplot(mergedata, aes(x=total_C, y = CB_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("1,4-beta-cellobiosidase Gene Abundances") + labs(title="Total Carbon vs, 1,4-beta-cellobiosidase Activity")
+
+ggplot(mergedata, aes(x=total_C, y = BX_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("Gene Abundances") + labs(title="Total Carbon vs. Beta-D-xylosidase Activity")
+```
+
+```{r, eval=FALSE}
+#Export figures 3a-c as jpegs
+a3=ggplot(mergedata, aes(x=total_C, y = BG_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("Beta-glucosidase Gene Abundances") + labs(title="Total Carbon vs. Beta-glucosidase Activity")
+pdf("../images/Fig3BG.png", width = 640, height = 640)
+print(a3)
+dev.off()
+
+b3=ggplot(mergedata, aes(x=total_C, y = BX_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + 
+ylab("Gene Abundances") + labs(title="Total Carbon vs. Beta-D-xylosidase Activity")
+pdf("../images/Fig3BX.png", width = 640, height = 640)
+print(b3)
+dev.off()
+
+c3=ggplot(mergedata, aes(x=total_C, y = CB_act)) + geom_boxplot() + facet_grid(Crop ~ SoilFrac) + xlab("Total Carbon") + ylab("1,4-beta-cellobiosidase Gene Abundances") + labs(title="Total Carbon vs, 1,4-beta-cellobiosidase Activity")
+pdf("../images/Fig3CB.png", width = 640, height = 640)
+print(c3)
+dev.off()
+```
+
+## Closing thoughts
+
+Once the count tables for all 3 genes were generated and the metadata was in tidy format, all of the tables had to be merged together using common IDs from our sample link table in order to generate one table to use for data analysis and creating figures.  First, the count tables were transposed using the t() function to flip the row and columns so they matched to format of the metadata and sample link tables. The gsub() function was also used to fix mismatching portions of column names. Each enzymes transposed count table was then merged with its own sample link table which was then merged with the metadata as well, all using the merge() function.  Lapply was used to format specific columns as numeric for plotting purposes. A column containing total counts of each gene was generated by summing across the rows in each newly merged table using the rowSums() function.  Using the paste() function, the resulting columns were then added onto one complete master table containing all the metadata and total abundances of all 3 genes and was ready for analysis.
+
+The gene counts in all subsequent steps must be standardized by the abundance of a known housekeeping gene for the numbers to be meaningful.  We did not have this information, so while the subsequent figures provide a framework for inserting the standardized gene counts, they are currently not accurate.  The ggpairs() function in the GGally package was used to generate a correlation matrix for all 3 enzyme activities and all 3 gene counts.  Ggplot was used to create boxplots of each enzyme activity vs gene counts, all faceted by crop type and soil fraction.  Ggplot was also used to create boxplots of each enzymes activity vs total carbon measurements found in each sample, again all faceted by crop type and soil fraction.
+
+Additionally, we are missing metegenome information for aggregate fractions in the CC(corn) and P(prairie) treatments, this is why there are missing box plots in the outputs corresponding to those two treatments. 
+
+## Thank you for reading!

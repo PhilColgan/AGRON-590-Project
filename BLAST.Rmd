@@ -1,0 +1,150 @@
+---
+title: "BLAST"
+root: ../../../
+output: html_document
+---
+BLAST pipeline
+
+Generate nucleotide sequences
+
+Two approaches
+
+  1. Nucleotide from NCBI directly
+  2. Convert amino acid seq to nucleotide seq 
+  
+#Method 1
+
+Search NCBI for E.C. number of choice, here a text files containing multiple E.C. numbers was used. 
+
+```{python, eval=FALSE}
+import sys
+from Bio import Entrez, SeqIO
+
+Entrez.email = 'jflater@iastate.edu'
+
+# First, find entries that contain the E.C. number
+ec_num = sys.argv[1].strip()
+#print ec_num
+#print 'E.C. '+ ec_num
+esearch_handle = Entrez.esearch(db='nucleotide', term='EC '+ec_num)
+# When term='E.C. we get zero results, however, if term=EC it works
+entries = Entrez.read(esearch_handle)
+esearch_handle.close()
+
+# Second, fetch these entries
+efetch_handle = Entrez.efetch(db='nucleotide', id=entries['IdList'], rettype='gb', retmode='xml') 
+records = Entrez.parse(efetch_handle)
+
+# Now, we go through the records and look for a feature with name 'EC_number'
+for record in records:
+      for feature in record['GBSeq_feature-table']:
+          for subfeature in feature['GBFeature_quals']:
+              if (subfeature['GBQualifier_name'] == 'EC_number'   and
+                subfeature['GBQualifier_value'] == ec_num):
+
+                    # If we found it, we extract the seq's start and end
+                    accession = record['GBSeq_primary-accession']
+                    interval = feature['GBFeature_intervals'][0]
+                    interval_start = interval['GBInterval_from']
+                    interval_end = interval['GBInterval_to']
+                    location = feature['GBFeature_location']
+                    if location.startswith('complement'):
+                        strand = 2
+                    else:
+                        strand = 1
+
+                    # Now we fetch the nucleotide sequence
+                    handle = Entrez.efetch(db="nucleotide", id=accession,
+                                           rettype="fasta", strand=strand,
+                                           seq_start = interval_start,
+                                           seq_stop = interval_end)
+                    seq = SeqIO.read(handle, "fasta")
+
+                    print('>GenBank Accession:{}'.format(accession))
+                    print(seq.seq)
+efetch_handle.close()
+```
+
+#Method 2
+
+Method one was not working in the manner that we expected, so we devised a two step method instead.
+First NCBI must manually be searched for the E.C. number of interest, in the protein database. https://www.ncbi.nlm.nih.gov/protein.
+The search results can be downloaded in fasta format, the format that the seq need to be in for blasting. 
+I did this for our EC numbers and saved all the fasta.txt files for each in the COBS_Protien_seqs_EC_3.2.1 folder.
+```{r}
+fasta.21<- read.table("data/COBS_Protien_seqs_EC_3.2.1/EC_3.2.1.21.fasta.txt", header = TRUE, fill = TRUE) 
+head(fasta.21)
+```
+First you must retrieve your metagenomes. Ours are on MG-RAST and available for download.
+
+We can use these amino acid sequences to query another database: RefSeq
+First we download the database:
+```{bash, eval=FLASE}
+wget ftp://ftp.cbi.nlm.nih.gov/blast/db/refseq_protein.* -P resfeq_protein
+```
+
+```{bash, eval=FLASE}
+blastp -db refseq_protein/refseq_protein -query COBS_\
+CAZY/COBS_Protien_seqs_EC_3.2.1/EC_3.2.1.21.fasta.txt\
+ -out EC_3.2.1.21.out -evalue 1e-5 -outfmt 6
+```
+
+Download RefSeq database
+```{bash, eval=FLASE}
+wget ftp://ftp.cbi.nlm.nih.gov/refseq/release/bacteria/*.genomic.gbff.gz -P refseq
+```
+
+This was done on MSU's HPCC so the directories need to be changed to the appropriate one for your analysis
+Convert RefSeq db to get nucleotide sequence for each gene:
+```{bash, eval=FLASE}
+ for x in *.genomic.gbff.gz;do echo "python /mnt/scratch/***/ncbi_tools/genbank_to_ffn_refseq.py $x ${x%.genomic.gbff.gz*}.1.genomic.fna.gz > ${x%.gbff.gz}.ffn";done > command.ffn.sh
+
+cat command.ffn.sh | /mnt/home/***/parallel-20161122/src/parallel -j 20
+```
+Take blastp output and get nucleotide sequences (this is where my script failed originally)
+```{bash, eval=FLASE}
+for y in *.out;do for x in /mnt/scratch/***/DB/refseq/*.ffn;do echo "python /mnt/scratch/***/ncbi_tools/blast_to_fna.py $y $x > $x.$y.fa";done > $y.sh;done
+for x in *.sh;do cat $x | ~/parallel-20161122/src/parallel -j 10;done
+```
+This needs to be concatenated due to the nature of the RefSeq db we get many files for each EC number, we then need to group those files 
+```{bash, eval=FLASE}
+for y in *.out;do echo "cat /mnt/scratch/***/DB/refseq/*.$y.fa > ./$y.fa";echo "rm /mnt/scratch/***/DB/refseq/*.$y.fa";done > command.cat.sh
+bash command.cat.sh
+```
+Now we cluster the sequences based on 99% similarity:
+```{bash, eval=FLASE}
+for x in EC_*.fa;do echo "cd-hit -i $x -o $x.99.fa -c 0.99 -n 5 -M 10000 -T 1";done > cdhit.command.sh
+cat cdhit.command.sh | /mnt/home/***/parallel-20161122/src/parallel -j 6
+```
+Now we make db to blast nucleotide seq.
+```{bash, eval=FLASE}
+for x in *.99.fa; do makeblastdb -in $x -dbtype nucl -out $x; done
+```
+Then we run blastn to query our metagenomes for the nucleotide sequences: on each EC and each genome r1 and r2
+```{bash}
+for x in /mnt/research/germs/jin/cobs/round1_fasta/*.fasta; do echo "blastn -db /mnt/scratch/***/COBS_CAZY/ec_db/EC_3.2.1.21.fa.99.fa -query $x -evalue 1e-5 -out ${x##*/}.blast -outfmt 6"; done > command.blast.EC_3.2.1.21.fa.99.fa.r1.sh
+```
+Run this on the files above:
+```{bash, eval=FLASE}
+cat command.blast.EC_3.2.1.21.fa.99.fa.r1.sh | /mnt/home/***/parallel-20161122/sr\
+c/parallel
+```
+Now we retrieve the best hits from the blast output, because our sequence matches many sequences, but not all matches are the same, we chose the most similar.
+```{bash, eval=FLASE}
+for x in *.blast; do python ../COBS_CAZY/best_hit_blast_idcut.py $x 94 > $x.besthit94; done
+```
+Now we count up the the number of hits for each sample and each EC #(run 3 times)
+```{bash}
+python ../COBS_CAZY/count_up.py *.21.fa.99.fa.blast.besthit94
+cp summary-count.csv summary_count_21.csv
+
+python ../COBS_CAZY/count_up.py *.37.fa.99.fa.blast.besthit94
+cp summary-count.csv summary_count_37.csv
+
+python ../COBS_CAZY/count_up.py *.91.fa.99.fa.blast.besthit94
+cp summary-count.csv summary_count_91.csv
+```
+Fin
+
+
+Now we have count tables for each EC# (enzyme)

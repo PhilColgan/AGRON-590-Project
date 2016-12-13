@@ -1,0 +1,14 @@
+base
+tidyverse
+ggplot2
+tibble
+tidyr
+readr
+purrr
+dplyr
+stringi
+GGally
+reshape2
+permute
+lattice
+vegan
