@@ -12,7 +12,7 @@ In this repo you will find:
   1. README.Rmd (that you are reading)
   2. The .Rpres file for our presentation that we gave in class
   3. The FinalCOBS.Rmd + FinalCOBS.html that is our paper for this project
-  4. A BLAST.Rmd that contains a pipeline for generating gene counts for a enzyme of interest(this is must be done on a super computer due to the large size of the data)
+  4. A BLAST.Rmd that contains a pipeline for generating gene counts for a enzyme of interest (this must be done on a super computer due to the large size of the data)
   5. The raw data that we began with
   6. Various images and figures that we retrieved from previous work or generated from our data
 
