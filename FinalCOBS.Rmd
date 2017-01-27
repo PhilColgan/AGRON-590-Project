@@ -304,8 +304,9 @@ BX_abun=read.table("data/summary_counts/summary_count_3.2.1.37.fasta.tsv",header
 CB_abun=read.table("data/summary_counts/summary_count_3.2.1.91.fasta.tsv",header=T)
 
 meta=read.csv("Tidy_Cobs.csv")
-smplnk=read.csv("data/SampleLink4.csv")
+smplnk=read.csv("data/SampleLink5.csv")
 #FOR NORMALIZATION TRY DEseq2
+
 
 #Transpose each data frame and modify rownames so they all match
 BG.t=data.frame(t(BG_abun))
@@ -332,6 +333,20 @@ smplnkCB=merge(CB.t,smplnk,by.x="row",by.y="rast_file")
 mergedataBG=merge(meta,smplnkBG, by.x = "SampleName", by.y = "SampleName")
 mergedataBX=merge(meta,smplnkBX, by.x = "SampleName", by.y = "SampleName")
 mergedataCB=merge(meta,smplnkCB, by.x = "SampleName", by.y = "SampleName")
+
+
+library(DESeq2)
+
+
+tempcountData <- t(mergedataCB[,(ncol(meta)+2):(ncol(mergedataCB)-(ncol(smplnk)-2) )])
+countData <- tempcountData[rowSums(tempcountData)!=0,]
+colData <- mergedataCB[,1:(ncol(meta))]
+
+deseq2_deseqds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~agg_frac)
+rowSums(countData)
+deseq2_de <- DESeq(deseq2_deseqds)
+
+
 
 #Make counts numeric instead of integers
 cn<-c(names(mergedataBG[, 1:77]), "SoilFrac", "Crop")
