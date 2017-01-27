@@ -338,15 +338,27 @@ mergedataCB=merge(meta,smplnkCB, by.x = "SampleName", by.y = "SampleName")
 library(DESeq2)
 
 
-tempcountData <- t(mergedataCB[,(ncol(meta)+2):(ncol(mergedataCB)-(ncol(smplnk)-2) )])
-countData <- tempcountData[rowSums(tempcountData)!=0,]
-colData <- mergedataCB[,1:(ncol(meta))]
+x <- mergedataBG
+x <- mergedataBX
+x <- mergedataCB
+
+countData <- t(x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
+colData <- x[,1:(ncol(meta))]
 
 deseq2_deseqds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~agg_frac)
-rowSums(countData)
-deseq2_de <- DESeq(deseq2_deseqds)
+gm_mean = function(x, na.rm=TRUE){
+ exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans = apply(counts(deseq2_deseqds), 1, gm_mean)
+dds = estimateSizeFactors(deseq2_deseqds, geoMeans = geoMeans)
+deseq2_de = DESeq(dds, fitType="local")
 
+tempcount <- counts(deseq2_de, normalized=TRUE)
+x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )] <- t(tempcount)
 
+mergedataBG <- x
+mergedataBX <- x
+mergedataCB <- x
 
 #Make counts numeric instead of integers
 cn<-c(names(mergedataBG[, 1:77]), "SoilFrac", "Crop")
