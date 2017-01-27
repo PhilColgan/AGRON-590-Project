@@ -367,9 +367,9 @@ mergedataBX[, !names(mergedataBX) %in% cn] = lapply(mergedataBX[, !names(mergeda
 mergedataCB[, !names(mergedataCB) %in% cn] = lapply(mergedataCB[, !names(mergedataCB) %in% cn], as.numeric)
 
 #Sum gene counts for each metagenome
-countBG = rowSums(mergedataBG[,77:(ncol(mergedataBG)-7)])
-countBX = rowSums(mergedataBX[,77:(ncol(mergedataBX)-7)])
-countCB = rowSums(mergedataCB[,77:(ncol(mergedataCB)-7)])
+countBG = rowSums(mergedataBG[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
+countBX = rowSums(mergedataBX[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
+countCB = rowSums(mergedataCB[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
 mergedataBG$BG_counts<-countBG
 mergedataBX$BX_counts<-countBX
 mergedataCB$CB_counts<-countCB
@@ -384,9 +384,9 @@ mergedata[,(ncol(mergedata)-2):(ncol(mergedata))] = lapply(mergedata[,(ncol(merg
 ```{r, cache=TRUE, warning=FALSE}
 #standardize mergedata using decostand in Vegan package
 mergedatastd <- decostand(mergedata[,c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts")], "range")
-
+mergedatastd$agg_frac <- mergedata$agg_frac
 #Figure 1
-myvars <- c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts")
+myvars <- c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts", "agg_frac")
 subset = mergedatastd[myvars]
 ggpairs(subset, title="Enzyme Abundance and Activity Correlations")
 ```
