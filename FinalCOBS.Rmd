@@ -266,6 +266,8 @@ library(ggplot2)
 library(GGally)
 library(reshape2)
 library(vegan)
+source("https://bioconductor.org/biocLite.R")
+biocLite("DESeq2")
 ```
 
 #make the tidy metadata file
@@ -297,11 +299,13 @@ write.csv(tidy_cobs, "Tidy_Cobs.csv", row.names=F)
 #Previous analysis
 ```{r}
 #Read in the abundance, meta and link tables
-BG_abun=read.table("data/summary_counts/summary-count-21.tsv",header=T)
-BX_abun=read.table("data/summary_counts/summary-count-37.tsv",header=T)
-CB_abun=read.table("data/summary_counts/summary-count-91.tsv",header=T)
+BG_abun=read.table("data/summary_counts/summary_count_3.2.1.21.fasta.tsv",header=T)
+BX_abun=read.table("data/summary_counts/summary_count_3.2.1.37.fasta.tsv",header=T)
+CB_abun=read.table("data/summary_counts/summary_count_3.2.1.91.fasta.tsv",header=T)
+
 meta=read.csv("Tidy_Cobs.csv")
 smplnk=read.csv("data/SampleLink4.csv")
+#FOR NORMALIZATION TRY DEseq2
 
 #Transpose each data frame and modify rownames so they all match
 BG.t=data.frame(t(BG_abun))
@@ -336,9 +340,9 @@ mergedataBX[, !names(mergedataBX) %in% cn] = lapply(mergedataBX[, !names(mergeda
 mergedataCB[, !names(mergedataCB) %in% cn] = lapply(mergedataCB[, !names(mergedataCB) %in% cn], as.numeric)
 
 #Sum gene counts for each metagenome
-countBG = rowSums(mergedataBG[,77:6291])
-countBX = rowSums(mergedataBX[,77:2532])
-countCB = rowSums(mergedataCB[,77:1439])
+countBG = rowSums(mergedataBG[,77:(ncol(mergedataBG)-7)])
+countBX = rowSums(mergedataBX[,77:(ncol(mergedataBX)-7)])
+countCB = rowSums(mergedataCB[,77:(ncol(mergedataCB)-7)])
 mergedataBG$BG_counts<-countBG
 mergedataBX$BX_counts<-countBX
 mergedataCB$CB_counts<-countCB
@@ -347,7 +351,7 @@ mergedataCB$CB_counts<-countCB
 mergedata = mergedataBG
 mergedata$BX_counts<-paste(mergedataBX$BX_counts)
 mergedata$CB_counts<-paste(mergedataCB$CB_counts)
-mergedata[,6299:6301] = lapply(mergedata[,6299:6301],as.numeric)
+mergedata[,(ncol(mergedata)-2):(ncol(mergedata))] = lapply(mergedata[,(ncol(mergedata)-2):(ncol(mergedata))],as.numeric)
 ```
 
 ```{r, cache=TRUE, warning=FALSE}
