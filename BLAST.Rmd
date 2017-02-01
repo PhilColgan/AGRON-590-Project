@@ -128,10 +128,29 @@ Run this on the files above:
 ```{bash, eval=FLASE}
 cat command.blast.EC_3.2.1.21.fa.99.fa.r1.sh | /mnt/home/***/parallel-20161122/sr\
 c/parallel
+
+#Do this
+
+for y in /mnt/scratch/flaterj1/COBS_KEGG/db/*.fasta ; do for x in /mnt/research/germs/jin/cobs/round1_fasta/*.fasta; do echo "blastn -db $y -query $x -evalue 1e-5 -out ${x##*/}.blast -outfmt 6"; done > command.blast.${y##*/}.sh ; done
+
+for y in /mnt/scratch/flaterj1/COBS_KEGG/db/*.fasta ; do for x in /mnt/research/germs/jin/cobs/round2_fasta/*.fasta; do echo "blastn -db $y -query $x -evalue 1e-5 -out ${y##*/}.${x##*/}.blast -outfmt 6"; done > command.blast.${y##*/}.r2.sh ; done
+
+for x in /mnt/scratch/flaterj1/COBS_KEGG/qsub/*.sh; do python make_qsub.py env.qsub "cat $x | /mnt/home/flaterj1/parallel-20161122/src/parallel" > $x.qsub;done
+
+for x in /mnt/scratch/flaterj1/COBS_KEGG/qsub/*.r2.sh; do python make_qsub.py env.qsub "cat $x | /mnt/home/flaterj1/parallel-20161122/src/parallel" > $x.qsub;done
+##This to submit qsub
+for x in *.r2.qsub; do qsub $x; done
+
+
+
+
 ```
 Now we retrieve the best hits from the blast output, because our sequence matches many sequences, but not all matches are the same, we chose the most similar.
 ```{bash, eval=FLASE}
 for x in *.blast; do python ../COBS_CAZY/best_hit_blast_idcut.py $x 94 > $x.besthit94; done
+
+for x in *.blast; do python ../../COBS_CAZY/COBS_CAZY/best_hit_blast_idcut.py $x 94 > $x.besthit94; done
+
 ```
 Now we count up the the number of hits for each sample and each EC #(run 3 times)
 ```{bash}
@@ -143,6 +162,8 @@ cp summary-count.csv summary_count_37.csv
 
 python ../COBS_CAZY/count_up.py *.91.fa.99.fa.blast.besthit94
 cp summary-count.csv summary_count_91.csv
+
+for x in $(cat list.ec.txt);do python ../../COBS_CAZY/COBS_CAZY/count_up.py $x* ;cp summary-count.tsv $x.summary_count.tsv;done
 ```
 Fin
 
