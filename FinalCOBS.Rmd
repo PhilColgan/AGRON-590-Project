@@ -295,13 +295,21 @@ parsed_cobs$treatment <- unlist(stri_extract_all_regex(parsed_cobs$plot_treatmen
 tidy_cobs <- select(parsed_cobs, plot, treatment, sample_month:CO2_2012)
 write.csv(tidy_cobs, "Tidy_Cobs.csv", row.names=F)
 ```
-
+1.14.18.1.fasta.summary_count.tsv
+3.1.3.2.fasta.summary_count.tsv
+3.2.1.21.fasta.summary_count.tsv
+3.2.1.37.fasta.summary_count.tsv
+3.2.1.4.fasta.summary_count.tsv
+3.2.1.41.fasta.summary_count.tsv
+3.2.1.86.fasta.summary_count.tsv
+3.2.1.91.fasta.summary_count.tsv
+3.4.11.1.fasta.summary_count.tsv
 #Previous analysis
 ```{r}
 #Read in the abundance, meta and link tables
-BG_abun=read.table("data/summary_counts/summary_count_3.2.1.21.fasta.tsv",header=T)
-BX_abun=read.table("data/summary_counts/summary_count_3.2.1.37.fasta.tsv",header=T)
-CB_abun=read.table("data/summary_counts/summary_count_3.2.1.91.fasta.tsv",header=T)
+BG_abun=read.table("data/summary_counts/3.2.1.21.fasta.summary_count.tsv",header=T)
+BX_abun=read.table("data/summary_counts/3.2.1.37.fasta.summary_count.tsv",header=T)
+CB_abun=read.table("data/summary_counts/3.2.1.91.fasta.summary_count.tsv",header=T)
 
 meta=read.csv("Tidy_Cobs.csv")
 smplnk=read.csv("data/SampleLink5.csv")
@@ -327,9 +335,9 @@ meta$myear<-paste(meta$sample_month, meta$sample_year, sep="")
 meta$SampleName<-paste(meta$group, meta$agg_frac, meta$myear, sep="-")
 
 #Merge transposed count tables with link tables
-smplnkBG=merge(BG.t,smplnk,by.x="row",by.y="rast_file")
-smplnkBX=merge(BX.t,smplnk,by.x="row",by.y="rast_file")
-smplnkCB=merge(CB.t,smplnk,by.x="row",by.y="rast_file")
+smplnkBG=merge(BG.t,smplnk,by.x="row",by.y="filename")
+smplnkBX=merge(BX.t,smplnk,by.x="row",by.y="filename")
+smplnkCB=merge(CB.t,smplnk,by.x="row",by.y="filename")
 mergedataBG=merge(meta,smplnkBG, by.x = "SampleName", by.y = "SampleName")
 mergedataBX=merge(meta,smplnkBX, by.x = "SampleName", by.y = "SampleName")
 mergedataCB=merge(meta,smplnkCB, by.x = "SampleName", by.y = "SampleName")
