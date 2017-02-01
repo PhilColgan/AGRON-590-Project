@@ -164,8 +164,8 @@ python ../COBS_CAZY/count_up.py *.91.fa.99.fa.blast.besthit94
 cp summary-count.csv summary_count_91.csv
 
 for x in $(cat list.ec.txt);do python ../../COBS_CAZY/COBS_CAZY/count_up.py $x* ;cp summary-count.tsv $x.summary_count.tsv;done
-
-scp hpc:/mnt/research/germs/jared/summary_count_* .
+cp *.summary* /mnt/research/germs/jared
+scp hpc:/mnt/research/germs/jared/*.summary* .
 
 ```
 Fin
