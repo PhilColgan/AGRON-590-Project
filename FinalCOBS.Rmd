@@ -266,8 +266,8 @@ library(ggplot2)
 library(GGally)
 library(reshape2)
 library(vegan)
-source("https://bioconductor.org/biocLite.R")
-biocLite("DESeq2")
+#source("https://bioconductor.org/biocLite.R")
+#biconductor("DESeq2")
 ```
 
 #make the tidy metadata file
@@ -346,7 +346,10 @@ mergedataCB=merge(meta,smplnkCB, by.x = "SampleName", by.y = "SampleName")
 library(DESeq2)
 
 norm <- function(x){
+xx <- x
 x <- subset(x, rowSums(x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )]) >1 )
+#xx <- subset(x, rowSums(x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )]) <1 )
+
 countData <- t(x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
 colData <- x[,1:(ncol(meta))]
 
@@ -360,7 +363,13 @@ deseq2_de = DESeq(dds, fitType="local")
 
 tempcount <- counts(deseq2_de, normalized=TRUE)
 x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )] <- t(tempcount)
-return(x)
+
+for (i in 1:nrow(xx)){
+    if (xx$SampleName[i] %in% x$SampleName){
+        xx[xx$SampleName == xx$SampleName[i],]  <- x[x$SampleName == xx$SampleName[i],]
+    }
+}
+return(xx)
 }
 
 
@@ -394,8 +403,9 @@ mergedata[,(ncol(mergedata)-2):(ncol(mergedata))] = lapply(mergedata[,(ncol(merg
 #standardize mergedata using decostand in Vegan package
 mergedatastd <- decostand(mergedata[,c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts")], "range")
 mergedatastd$agg_frac <- mergedata$agg_frac
+mergedatastd$crop <- mergedata$crop
 #Figure 1
-myvars <- c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts", "agg_frac")
+myvars <- c("BG_act","BX_act","CB_act","Sum_C_act","CB_counts","BX_counts","BG_counts", "agg_frac", "crop")
 subset = mergedatastd[myvars]
 ggpairs(subset, title="Enzyme Abundance and Activity Correlations")
 ```
