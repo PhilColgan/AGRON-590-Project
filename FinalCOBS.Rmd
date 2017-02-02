@@ -345,28 +345,29 @@ mergedataCB=merge(meta,smplnkCB, by.x = "SampleName", by.y = "SampleName")
 
 library(DESeq2)
 
-
-x <- mergedataBG
-x <- mergedataBX
-x <- mergedataCB
-
+norm <- function(x){
+x <- subset(x, rowSums(x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )]) >1 )
 countData <- t(x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
 colData <- x[,1:(ncol(meta))]
 
 deseq2_deseqds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~agg_frac)
 gm_mean = function(x, na.rm=TRUE){
- exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
 }
-geoMeans = apply(counts(deseq2_deseqds), 1, gm_mean)
+geoMeans = apply(counts(deseq2_deseqds), 1,gm_mean)
 dds = estimateSizeFactors(deseq2_deseqds, geoMeans = geoMeans)
 deseq2_de = DESeq(dds, fitType="local")
 
 tempcount <- counts(deseq2_de, normalized=TRUE)
 x[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )] <- t(tempcount)
+return(x)
+}
 
-mergedataBG <- x
-mergedataBX <- x
-mergedataCB <- x
+
+mergedataBG <- norm(mergedataBG)
+mergedataBX <- norm(mergedataBX)
+mergedataCB <- norm(mergedataCB)
+
 
 #Make counts numeric instead of integers
 cn<-c(names(mergedataBG[, 1:77]), "SoilFrac", "Crop")
@@ -375,9 +376,9 @@ mergedataBX[, !names(mergedataBX) %in% cn] = lapply(mergedataBX[, !names(mergeda
 mergedataCB[, !names(mergedataCB) %in% cn] = lapply(mergedataCB[, !names(mergedataCB) %in% cn], as.numeric)
 
 #Sum gene counts for each metagenome
-countBG = rowSums(mergedataBG[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
-countBX = rowSums(mergedataBX[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
-countCB = rowSums(mergedataCB[,(ncol(meta)+2):(ncol(x)-(ncol(smplnk)-2) )])
+countBG = rowSums(mergedataBG[,(ncol(meta)+2):(ncol(mergedataBG)-(ncol(smplnk)-2) )])
+countBX = rowSums(mergedataBX[,(ncol(meta)+2):(ncol(mergedataBX)-(ncol(smplnk)-2) )])
+countCB = rowSums(mergedataCB[,(ncol(meta)+2):(ncol(mergedataCB)-(ncol(smplnk)-2) )])
 mergedataBG$BG_counts<-countBG
 mergedataBX$BX_counts<-countBX
 mergedataCB$CB_counts<-countCB
